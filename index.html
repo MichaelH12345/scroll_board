@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Departures</title>
+<style>
+  @font-face {
+    font-family: 'Open Sans Bold';
+    src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Bold.ttf') format('truetype');
+  }
+  @font-face {
+    font-family: 'Open Sans';
+    src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Regular.ttf') format('truetype');
+  }
+  body {
+    margin: 0;
+    background-color: black;
+    color: white;
+    font-family: 'Open Sans', sans-serif;
+  }
+  header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background-color: #001f4d;
+    border-bottom: 4px solid white;
+    padding-left: 15px;
+  }
+  .header-title {
+    font-family: 'Open Sans Bold';
+    font-size: 4rem;
+    margin: 0;
+  max-width: calc(100% - 320px); /* leave space for page indicator */
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.1;
+}
+
+  .header-row {
+    display: flex;
+    align-items: center;
+    font-size: 2.5rem;
+  }
+  .time { width: 100px; }
+  .destination { flex: 1; margin-left: 50px; }
+  .platform-header { width: 150px; position: absolute; right: 275px; text-align: right; }
+  .status { width: 150px; position: absolute; right: 15px; text-align: right; }
+  .departure-row {
+    display: flex;
+    align-items: flex-start;
+    font-size: 3rem;
+    border-bottom: 3px solid grey;
+    padding: 5px 15px;
+    position: relative;
+    line-height: 1.3;
+    transition: transform 0.5s ease-in-out;
+  }
+  .slide-out {
+    transform: translateX(100%);
+  }
+  .slide-in {
+    transform: translateX(-100%);
+    animation: slideIn 0.5s forwards ease-in-out;
+  }
+  @keyframes slideIn {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(0); }
+  }
+  .destination-box { flex: 1; margin-left: 25px; }
+  .secondary-info { font-size: 3rem; }
+  .platform { position: absolute; right: 275px; }
+  .expected { position: absolute; right: 15px; }
+  .placeholder {
+    height: 0;
+    overflow: hidden;
+    transition: height 0.5s ease-in-out;
+  }
+  footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    height: 87.5px;
+    background-color: #001f4d;
+    border-top: 4px solid white;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 15px;
+    box-sizing: border-box;
+  }
+  #footer-message {
+    font-size: 2.5rem;
+    max-width: 75%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #footer-page { font-size: 3rem; }
+  #footer-time { font-size: 3.5rem; font-family: 'Open Sans Bold'; }
+  #footer-time .label { font-size: 60%; font-family: 'Open Sans'; }
+  @keyframes fade {
+    0% { opacity: 0; }
+    50% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .flash {
+    animation: fade 1s infinite ease-in-out;
+  }
+  #filler-rectangle {
+    height: 0;
+    background-color: solid black;
+    border-top: 0px solid #900;
+  }
+  #overflow-container {
+  background-color: black;
+  font-size: 2.4rem;
+  padding: 0 15px;
+}
+
+#overflow-container .departure-row {
+  border-bottom: 2px solid #444;
+  opacity: 0.6;
+}
+
+#main-departures-container {
+    position: fixed;
+    top: 0; /* start at top, we'll adjust in JS */
+    left: 0;
+    right: 0;
+    bottom: 87.5px; /* space for footer */
+    overflow: visible;
+    background-color: black;
+    transform: translateY(0);
+}
+
+/* Page indicator box in header */
+#page-indicator {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 275px;
+  height: 60px;
+  border: 3px solid #888;
+  background-color: ; /* lighter grey fill */
+  color: white;
+  font-family: 'Open Sans';
+  font-size: 2.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  overflow: hidden; /* needed for wipe effect */
+}
+
+/* Wipe effect overlay */
+#page-indicator .wipe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background-color: #888; /* slightly brighter fill for wipe */
+  z-index: 1;
+  transition: width 10s linear;
+}
+
+/* Text stays on top of wipe */
+#page-indicator span {
+  position: relative;
+  z-index: 2;
+}
+
+
+
+  /* remove previous absolute positioning if any */
+  #departures-container,
+  #filler-rectangle,
+#overflow-departures {
+  height: 100%;
+  overflow: hidden;
+
+  }
+
+</style>
+</head>
+<body>
+<header>
+  <div id="page-indicator"><span>Page 1 of 2</span></div>
+  <div class="header-title" id="header-title">Departures</div>
+  <div class="header-row">
+    <div class="time">Time</div>
+    <div class="destination">Destination</div>
+    <div class="platform-header">Plat</div>
+    <div class="status">Status</div>
+  </div>
+</header>
+
+<!-- New wrapper for scrollable departures -->
+<div id="main-departures-container">
+  <div id="departures-container"></div>
+  <div id="filler-rectangle"></div>
+  <div id="overflow-departures"></div>
+</div>
+
+<footer>
+  <div id="footer-message"></div>
+  <div id="footer-page"></div>
+  <div id="footer-time">
+    <span class="label">Time now </span>
+    <span id="footer-time-value"></span>
+  </div>
+</footer>
+
+
+<script>
+const container = document.getElementById('departures-container');
+function positionDeparturesUnderHeader() {
+    const header = document.querySelector('header');
+    const mainContainer = document.getElementById('main-departures-container');
+    if (header && mainContainer) {
+        mainContainer.style.top = header.offsetHeight + 'px';
+    }
+}
+
+// Call on load
+positionDeparturesUnderHeader();
+
+// Also call on window resize
+window.addEventListener('resize', positionDeparturesUnderHeader);
+
+const footerMessage = document.getElementById('footer-message');
+const footerTimeValue = document.getElementById('footer-time-value');
+const headerTitle = document.getElementById('header-title');
+const onTimeStreaks = new Map(); // serviceId -> count of consecutive "On time"
+let currentStationCode = localStorage.getItem('stationCode') || 'CAR';
+let services = [];
+let previousServices = [];
+let visibleServices = [];
+let lastFetchFailed = false;
+let offlineStartTime = null;
+let failedAttemptCount = 0;
+const platformChangeTime = new Map();
+let fillerLocked = false;
+
+let onOverflowPage = false;
+let sliding = false;
+
+// Slide container up/down
+function slideToOverflow() {
+  if (sliding) return; // prevent overlapping slides
+
+  const mainContainer = document.getElementById('main-departures-container');
+  const filler = document.getElementById('filler-rectangle');
+  const overflow = document.getElementById('overflow-departures');
+
+  if (!mainContainer || !filler || !overflow) return;
+  if (overflow.children.length === 0) return; // nothing to slide to
+
+  sliding = true;
+
+  // Freeze filler height
+  const frozenHeight = filler.offsetHeight;
+  filler.style.height = `${frozenHeight}px`;
+  filler.style.transition = 'none';
+  fillerLocked = true; // lock filler during slide
+
+  // Total height to slide = bottom of filler - top of container
+  const containerRect = mainContainer.getBoundingClientRect();
+  const fillerRect = filler.getBoundingClientRect();
+  const slideAmount = fillerRect.bottom - containerRect.top;
+
+  // Apply sliding
+  const duration = getSlideDuration();
+mainContainer.style.transition = `transform ${duration}s ease-in-out`;
+  mainContainer.style.transform = onOverflowPage
+    ? 'translateY(0px)'                // back to main list
+    : `translateY(-${slideAmount}px)`; // up to overflow
+
+  // Toggle page state
+  onOverflowPage = !onOverflowPage;
+
+
+setTimeout(() => {
+  if (!onOverflowPage) {
+    fillerLocked = false;
+    updateFillerHeight();
+  }
+  sliding = false;
+}, duration * 1000 + 100); // small buffer
+}
+
+// Trigger slide every multiple of 10 seconds (only once per second)
+let lastSlideSecond = -1;
+setInterval(() => {
+  const now = new Date();
+  const sec = now.getSeconds();
+  if (sec % 7 === 0 && sec !== lastSlideSecond) {
+    lastSlideSecond = sec;
+    slideToOverflow();
+  }
+}, 250); // check 4x per second to avoid missing exact second
+
+function updatePageIndicator() {
+  const pageIndicator = document.getElementById('page-indicator');
+  const overflow = document.getElementById('overflow-departures');
+  if (!pageIndicator || !overflow) return;
+
+  // 🔴 Hide indicator if no overflow services
+  if (overflow.children.length === 0) {
+    pageIndicator.style.display = 'none';
+    return;
+  }
+
+  // 🟢 Show indicator if overflow exists
+  pageIndicator.style.display = 'flex';
+
+  const textSpan = pageIndicator.querySelector('span');
+  textSpan.textContent = onOverflowPage ? 'Page 2 of 2' : 'Page 1 of 2';
+
+  // Create wipe div if it doesn't exist
+  let wipeDiv = pageIndicator.querySelector('.wipe');
+  if (!wipeDiv) {
+    wipeDiv = document.createElement('div');
+    wipeDiv.classList.add('wipe');
+    pageIndicator.appendChild(wipeDiv);
+  }
+
+  // Restart wipe animation
+  wipeDiv.style.transition = 'none';
+  wipeDiv.style.width = '0%';
+  void wipeDiv.offsetWidth; // force reflow
+  wipeDiv.style.transition = 'width 7s linear';
+  wipeDiv.style.width = '100%';
+}
+
+
+// Call inside slideToOverflow after page toggle
+function slideToOverflow() {
+  if (sliding) return;
+
+  const mainContainer = document.getElementById('main-departures-container');
+  const filler = document.getElementById('filler-rectangle');
+  const overflow = document.getElementById('overflow-departures');
+  if (!mainContainer || !filler || !overflow || overflow.children.length === 0) return;
+
+  sliding = true;
+
+  const frozenHeight = filler.offsetHeight;
+  filler.style.height = `${frozenHeight}px`;
+  filler.style.transition = 'none';
+  fillerLocked = true;
+
+  const containerRect = mainContainer.getBoundingClientRect();
+  const fillerRect = filler.getBoundingClientRect();
+  const slideAmount = fillerRect.bottom - containerRect.top;
+
+  mainContainer.style.transition = 'transform 0.75s ease-in-out';
+  mainContainer.style.transform = onOverflowPage
+    ? 'translateY(0px)'
+    : `translateY(-${slideAmount}px)`;
+
+  onOverflowPage = !onOverflowPage;
+
+  // Update page indicator
+  updatePageIndicator();
+
+  setTimeout(() => {
+    if (!onOverflowPage) {
+      fillerLocked = false;
+      updateFillerHeight();
+    }
+    sliding = false;
+  }, 1000);
+}
+
+// Also call once on page load
+updatePageIndicator();
+
+
+function getServiceId(service) {
+  return `${service.std}-${service.destination?.[0]?.locationName || ''}-${service.isBus ? 'bus' : 'train'}`;
+}
+function parseTime(std) {
+  if (!std) return Infinity;
+  const [h, m] = std.split(':').map(Number);
+  return h * 60 + m;
+}
+function isTime(value) {
+  return /^\d{2}:\d{2}$/.test(value);
+}
+function updateFooterTime() {
+  const now = new Date();
+  footerTimeValue.textContent = now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+setInterval(updateFooterTime, 1000);
+updateFooterTime();
+
+
+// Global flag to force flash animation restart on full minute
+let lastFlashResetMinute = -1;
+// Run a cheap check roughly every second
+setInterval(() => {
+  const now = new Date();
+  const currentSecond = now.getSeconds();
+  const currentMinute = now.getMinutes();
+  if (currentSecond === 0 && currentMinute !== lastFlashResetMinute) {
+    lastFlashResetMinute = currentMinute;
+    const flashingElements = document.querySelectorAll('.flash');
+    flashingElements.forEach(el => {
+      el.classList.remove('flash');
+      void el.offsetWidth;
+      el.classList.add('flash');
+    });
+  }
+}, 900);
+
+function updateFooterDate() {
+  const now = new Date();
+  const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
+  const day = now.getDate();
+  const month = now.toLocaleDateString('en-GB', { month: 'long' });
+  function getOrdinal(n) {
+    if (n >= 11 && n <= 13) return n + 'th';
+    switch (n % 10) {
+      case 1: return n + 'st';
+      case 2: return n + 'nd';
+      case 3: return n + 'rd';
+      default: return n + 'th';
+    }
+  }
+  footerMessage.textContent = `${weekday} ${getOrdinal(day)} ${month}`;
+}
+updateFooterDate();
+
+function populateOverflowDepartures() {
+  const overflow = document.getElementById('overflow-departures');
+  overflow.innerHTML = '';
+
+  if (visibleServices.length === 0) return;
+
+  const lastVisibleId = getServiceId(visibleServices[visibleServices.length - 1]);
+  const startIndex = services.findIndex(s => getServiceId(s) === lastVisibleId) + 1;
+  if (startIndex >= services.length) return;
+
+  for (let i = startIndex; i < services.length; i++) {
+    const row = createRow(services[i]);
+    row.classList.remove('slide-in', 'slide-out');
+    overflow.appendChild(row);
+  }
+
+  // Add this line to filter rows
+  filterOverflowRows();
+}
+
+let overflowCutoffY = 0;
+
+function calculateOverflowMaxHeight() {
+    const filler = document.getElementById('filler-rectangle');
+    const overflow = document.getElementById('overflow-departures');
+    if (!filler || !overflow) return;
+
+    overflow.offsetHeight; // force reflow
+    overflowCutoffY = filler.getBoundingClientRect().bottom - 10;
+}
+
+function getPageHeight() {
+  return window.innerWidth > window.innerHeight
+    ? 850   // landscape
+    : 1495; // portrait
+}
+
+function getSlideDuration() {
+  return window.innerWidth > window.innerHeight
+    ? 0.75   // landscape
+    : 1.0; // portrait
+}
+
+function filterOverflowRows() {
+  const overflow = document.getElementById('overflow-departures');
+  const footer = document.querySelector('footer');
+  if (!overflow || !footer) return;
+
+  const cutoff = footer.getBoundingClientRect().top + 1495;
+  let hideFromHere = false;
+
+  Array.from(overflow.children).forEach(row => {
+    if (hideFromHere) {
+      row.style.display = 'none';
+      return;
+    }
+
+    const rowBottom = row.getBoundingClientRect().bottom;
+
+    if (rowBottom > cutoff) {
+      row.style.display = 'none';
+      hideFromHere = true; // 🔑 stop showing any further rows
+    } else {
+      row.style.display = 'flex';
+    }
+  });
+}
+
+
+
+function fillRow(row, service) {
+  row.innerHTML = '';
+  const time = document.createElement('div');
+  time.textContent = service.std || '';
+  row.appendChild(time);
+  const destBox = document.createElement('div');
+  destBox.classList.add('destination-box');
+  const destMain = document.createElement('div');
+  destMain.textContent = service.destination?.[0]?.locationName || '';
+  destBox.appendChild(destMain);
+  const operator = service.operator || '';
+  // Via
+  if (service.destination?.[0]?.via) {
+    const viaLine = document.createElement('div');
+    viaLine.textContent = service.destination[0].via;
+    viaLine.classList.add('secondary-info');
+    destBox.appendChild(viaLine);
+  }
+  // Coach length
+  if (service.length && service.length !== 0) {
+    const lengthLine = document.createElement('div');
+    lengthLine.textContent = `This train has ${service.length} coaches.`;
+    lengthLine.classList.add('secondary-info');
+    destBox.appendChild(lengthLine);
+  }
+  // Avanti Pendolino
+  if (operator === 'Avanti West Coast' && !service.isBus) {
+    const pendolinoLine = document.createElement('div');
+    pendolinoLine.textContent = 'Avanti West Coast Pendolino';
+    pendolinoLine.classList.add('secondary-info');
+    destBox.appendChild(pendolinoLine);
+  }
+  // Heathrow Express
+  if (operator === 'Heathrow Express') {
+    const heathrowLine = document.createElement('div');
+    heathrowLine.textContent = 'Heathrow Express';
+    heathrowLine.classList.add('secondary-info');
+    destBox.appendChild(heathrowLine);
+  }
+  // LNER reservation
+  if (operator === 'London North Eastern Railway') {
+    const lnerLine = document.createElement('div');
+    lnerLine.textContent = 'Reserve seats up to 5 minutes before departure at LNER.co.uk';
+    lnerLine.classList.add('secondary-info');
+    destBox.appendChild(lnerLine);
+  }
+  // Delay/Cancel reason
+  if (service.cancelReason || service.delayReason) {
+    const reasonLine = document.createElement('div');
+    if (service.cancelReason) {
+      reasonLine.textContent = service.cancelReason.replace('This service has been cancelled because of', 'Service cancelled due to') + '.';
+      destBox.appendChild(reasonLine);
+      const compensationLine = document.createElement('div');
+      compensationLine.textContent = 'Compensation may apply.';
+      compensationLine.classList.add('secondary-info');
+      destBox.appendChild(compensationLine);
+    } else if (service.delayReason) {
+      reasonLine.textContent = service.delayReason.replace('This service has been delayed by', 'Service delayed due to') + '.';
+      destBox.appendChild(reasonLine);
+    }
+  }
+  // Rail Replacement Bus
+  if (service.isBus) {
+    const busLine = document.createElement('div');
+    busLine.textContent = 'Rail Replacement Bus';
+    busLine.classList.add('secondary-info');
+    destBox.insertBefore(busLine, destBox.children[1]);
+  }
+  row.appendChild(destBox);
+
+  const platform = document.createElement('div');
+  platform.classList.add('platform');
+  if (service.isBus) {
+    platform.textContent = 'BUS';
+  } else {
+    platform.textContent = service.platform || '';
+  }
+  const id = getServiceId(service);
+  const changeTime = platformChangeTime.get(id);
+  const now = Date.now();
+  const isFlashing = changeTime && (now - changeTime < 300000);
+  if (isFlashing && service.platform) {
+    platform.classList.add('flash');
+  }
+  platform.style.color = 'white';
+  row.appendChild(platform);
+
+  const expected = document.createElement('div');
+  expected.classList.add('expected');
+  expected.textContent = isTime(service.etd) ? `Exp ${service.etd}` : (service.etd || 'On time');
+  if (service.etd === 'Cancelled') {
+    expected.classList.add('flash');
+    expected.style.color = '#00bfff';
+    expected.style.fontFamily = 'Open Sans Bold';
+  } else if (service.etd && service.etd !== 'On time') {
+    expected.style.color = '#00bfff';
+    expected.style.fontFamily = 'Open Sans Bold';
+  }
+  row.appendChild(expected);
+}
+
+function is21SecondsPastSTD(std) {
+  if (!isTime(std)) return false;
+  const now = new Date();
+  const [h, m] = std.split(':').map(Number);
+  const stdTime = new Date();
+  stdTime.setHours(h, m, 0, 0);
+  return now - stdTime >= 21000;
+}
+
+function createRow(service) {
+  const row = document.createElement('div');
+  row.classList.add('departure-row');
+  row.dataset.id = getServiceId(service);
+  fillRow(row, service);
+  return row;
+}
+
+// ────────────────────────────────────────────────
+//  The three functions you wanted to add
+// ────────────────────────────────────────────────
+
+function getAvailableHeight(container) {
+  return window.innerHeight -
+         document.querySelector('header').offsetHeight -
+         document.querySelector('footer').offsetHeight -
+         30; // adjustable buffer
+}
+
+function populateContainer(containerElement, serviceList, visibleArray) {
+  containerElement.innerHTML = '';
+  visibleArray.length = 0;
+  const avail = getAvailableHeight(containerElement);
+  for (const service of serviceList) {
+    const test = createRow(service);
+    test.style.visibility = 'hidden';
+    test.style.position = 'absolute';
+    containerElement.appendChild(test);
+    const bottom = test.getBoundingClientRect().bottom - containerElement.getBoundingClientRect().top;
+    containerElement.removeChild(test);
+    if (bottom > avail) break;
+    const realRow = createRow(service);
+    containerElement.appendChild(realRow);
+    visibleArray.push(service);
+    // staggered slide-in
+    setTimeout(() => {
+      realRow.style.visibility = 'visible';
+      realRow.classList.add('slide-in');
+      setTimeout(() => realRow.classList.remove('slide-in'), 700);
+    }, 150 + visibleArray.length * 65);
+  }
+}
+
+function updateFillerHeight() {
+  if (fillerLocked) return; // skip if filler is locked (overflow page)
+
+  const filler = document.getElementById('filler-rectangle');
+  if (!filler) return;
+
+  const lastBottom = container.lastElementChild
+    ? container.lastElementChild.getBoundingClientRect().bottom
+    : container.getBoundingClientRect().top;
+
+  const footerTop = document.querySelector('footer').getBoundingClientRect().top;
+  const gap = Math.max(0, footerTop - lastBottom - 1);
+  filler.style.height = gap + 'px';
+}
+
+// ────────────────────────────────────────────────
+//  Rest of your original code continues here...
+// ────────────────────────────────────────────────
+
+function rebuildVisibleRows() {
+  container.innerHTML = '';
+  visibleServices = [];
+  const availableHeight = window.innerHeight -
+    document.querySelector('header').offsetHeight -
+    document.querySelector('footer').offsetHeight - 5;
+  for (let i = 0; i < services.length; i++) {
+    const service = services[i];
+    const testRow = createRow(service);
+    testRow.style.visibility = 'hidden';
+    testRow.style.position = 'absolute';
+    container.appendChild(testRow);
+    const fits =
+      testRow.getBoundingClientRect().bottom -
+      container.getBoundingClientRect().top <= availableHeight;
+    container.removeChild(testRow);
+    if (!fits) {
+      break;
+    }
+    const newRow = createRow(service);
+    container.appendChild(newRow);
+    visibleServices.push(service);
+    setTimeout(() => {
+      newRow.style.visibility = 'visible';
+      newRow.classList.add('slide-in');
+      setTimeout(() => newRow.classList.remove('slide-in'), 700);
+    }, 125 + i * 62.5);
+  }
+  updateFillerHeight();
+}
+function addNewServicesIfPossible() {
+  if (services.length === 0) return;
+  const availableHeight = window.innerHeight -
+    document.querySelector('header').offsetHeight -
+      document.querySelector('footer').offsetHeight;
+  // Find the index in the full services[] of our current last visible row
+  let startIndex = 0;
+  if (visibleServices.length > 0) {
+    const lastId = getServiceId(visibleServices[visibleServices.length - 1]);
+    const found = services.findIndex(s => getServiceId(s) === lastId);
+    if (found !== -1) startIndex = found + 1;
+  }
+  // Try to append ONLY consecutive services, stop on first that doesn't fit
+  for (let i = startIndex; i < services.length; i++) {
+    const service = services[i];
+    const testRow = createRow(service);
+    testRow.style.visibility = 'hidden';
+    testRow.style.position = 'absolute';
+    container.appendChild(testRow);
+    const fits =
+      testRow.getBoundingClientRect().bottom -
+      container.getBoundingClientRect().top <= availableHeight;
+    container.removeChild(testRow);
+    if (!fits) {
+      break; // ← This is the key: stop here — no skipping to later services
+    }
+    // Fits → add it
+    const newRow = createRow(service);
+    newRow.classList.add('slide-in');
+    container.appendChild(newRow);
+    visibleServices.push(service);
+    setTimeout(() => newRow.classList.remove('slide-in'), 700);
+  }
+}
+function addNewServicesIfPossible() {
+  const availableHeight = window.innerHeight -
+    document.querySelector('header').offsetHeight -
+      document.querySelector('footer').offsetHeight;
+
+  const overflow = document.getElementById('overflow-departures');
+
+  
+
+  // Find index of last currently visible service in the full services[]
+  let startIndex = 0;
+  if (visibleServices.length > 0) {
+    const lastVisibleId = getServiceId(visibleServices[visibleServices.length - 1]);
+    startIndex = services.findIndex(s => getServiceId(s) === lastVisibleId) + 1;
+  }
+
+  // Try to add next consecutive services, stop at first that doesn't fit
+  for (let i = startIndex; i < services.length; i++) {
+    const service = services[i];
+
+    // Test if this service would fit
+    const testRow = createRow(service);
+    testRow.style.visibility = 'hidden';
+    testRow.style.position = 'absolute';
+    container.appendChild(testRow);
+
+    const fits =
+      testRow.getBoundingClientRect().bottom -
+      container.getBoundingClientRect().top <= availableHeight;
+
+    container.removeChild(testRow);
+
+    if (!fits) break;
+
+    // Add it for real
+    const newRow = createRow(service);
+    newRow.classList.add('slide-in');
+    container.appendChild(newRow);
+    visibleServices.push(service);
+
+    // Remove from overflow if exists
+    if (overflow) {
+      const overflowRow = overflow.querySelector(`[data-id="${getServiceId(service)}"]`);
+      if (overflowRow) {
+        const height = overflowRow.offsetHeight;
+        overflowRow.classList.add('slide-out');
+        setTimeout(() => {
+          if (overflowRow.parentNode) overflowRow.parentNode.removeChild(overflowRow);
+
+          // Optionally, animate filler rectangle to absorb space
+          const filler = document.getElementById('filler-rectangle');
+          if (filler) {
+            const currentHeight = filler.offsetHeight;
+            filler.style.transition = 'height 0.55s ease-in-out';
+            filler.style.height = `${currentHeight + height}px`;
+          }
+        }, 500); // match slide-out duration
+      }
+    }
+
+    // Staggered animation removal
+    setTimeout(() => newRow.classList.remove('slide-in'), 700);
+  }
+}
+
+
+
+async function fetchDepartures() {
+  let success = false;
+  try {
+    const res = await fetch(`https://huxley2.azurewebsites.net/departures/${currentStationCode}/50?accessToken=e48245fd-c8d4-46b5-87ef-60e71665e6b6`);
+    const data = await res.json();
+    headerTitle.textContent = `${data.locationName || currentStationCode} Departures`;
+    let allServices = [];
+    if (data.trainServices) {
+      data.trainServices.forEach(s => {
+        s.isBus = false;
+        allServices.push(s);
+      });
+    }
+    if (data.busServices) {
+      data.busServices.forEach(s => {
+        s.isBus = true;
+        allServices.push(s);
+      });
+    }
+    allServices.sort((a, b) => parseTime(a.std) - parseTime(b.std));
+    const seen = new Set();
+    const newServices = allServices.filter(s => {
+      const id = getServiceId(s);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    success = true;
+    failedAttemptCount = 0;
+    offlineStartTime = null;
+    if (lastFetchFailed) {
+      services = newServices;
+      previousServices = structuredClone(newServices);
+      platformChangeTime.clear();
+      rebuildVisibleRows();
+      lastFetchFailed = false;
+      return;
+    }
+    if (previousServices.length === 0) {
+      services = newServices;
+      previousServices = structuredClone(newServices);
+      rebuildVisibleRows();
+      return;
+    }
+newServices.forEach(service => {
+  const id = getServiceId(service);
+  const etd = service.etd || 'On time';
+  if (etd === 'On time') {
+    const count = (onTimeStreaks.get(id) || 0) + 1;
+    onTimeStreaks.set(id, count);
+    if (
+      count >= 120 &&
+      is21SecondsPastSTD(service.std)
+    ) {
+      service.etd = 'Arrived';
+    }
+  } else {
+    onTimeStreaks.delete(id);
+  }
+});
+    const currentRows = Array.from(container.querySelectorAll('.departure-row'));
+visibleServices.forEach((oldVisibleService, i) => {
+  const newService = newServices.find(
+    s => getServiceId(s) === getServiceId(oldVisibleService)
+  );
+  if (!newService) return;
+  const row = currentRows[i];
+  if (!row) return; // <-- safety check
+
+  const oldEtd = oldVisibleService.etd || 'On time';
+  const newEtd = newService.etd || 'On time';
+  const oldPlatform = oldVisibleService.platform || '';
+  const newPlatform = newService.platform || '';
+  const etdChanged = newEtd !== oldEtd;
+  const platformChanged = oldPlatform !== newPlatform && newPlatform;
+  if (platformChanged) {
+    platformChangeTime.set(getServiceId(newService), Date.now());
+  }
+  if (etdChanged || platformChanged) {
+    row.classList.add('slide-out');
+    setTimeout(() => {
+      fillRow(row, newService);
+      row.classList.remove('slide-out');
+      row.classList.add('slide-in');
+      setTimeout(() => row.classList.remove('slide-in'), 700);
+    }, 700);
+  } else {
+    fillRow(row, newService);
+  }
+  visibleServices[i] = newService;
+});
+
+
+
+const newIds = new Set(newServices.map(getServiceId));
+const rowsToRemove = [];
+
+// Compare previous visible services (rows actually on screen) with new API
+previousServices.forEach((oldService, index) => {
+  const row = currentRows[index];
+  if (!row) return;
+  const id = getServiceId(oldService);
+  if (!newIds.has(id)) {
+    rowsToRemove.push({ row, index });
+  }
+});
+if (rowsToRemove.length > 0) {
+  rowsToRemove.reverse().forEach(({ row, index }) => {
+    const height = row.offsetHeight;
+    row.classList.add('slide-out');
+
+    setTimeout(() => {
+      if (row.parentNode) container.removeChild(row);
+
+      const placeholder = document.createElement('div');
+      placeholder.classList.add('placeholder');
+      placeholder.style.height = `${height}px`;
+
+      if (container.children[index]) {
+        container.insertBefore(placeholder, container.children[index]);
+      } else {
+        container.appendChild(placeholder);
+      }
+
+      // Temporarily unlock filler to stretch
+      const filler = document.getElementById('filler-rectangle');
+      if (filler) {
+        const currentHeight = filler.offsetHeight;
+        filler.style.transition = 'height 0.55s ease-in-out';
+        const wasLocked = fillerLocked;
+        fillerLocked = false; // temporarily allow update
+        filler.style.height = `${currentHeight + height}px`; // stretch filler
+
+        placeholder.style.transition = 'height 0.55s ease-in-out';
+        placeholder.style.height = '0px';
+
+        setTimeout(() => {
+          // Remove placeholder
+          if (placeholder.parentNode) container.removeChild(placeholder);
+
+          // TRY TO ADD NEW SERVICE(S) from overflow
+          addNewServicesIfPossible(); // this will remove them from overflow as needed
+
+          // RELock filler
+          fillerLocked = wasLocked;
+        }, 550);
+      }
+
+      visibleServices = visibleServices.filter(s => newIds.has(getServiceId(s)));
+    }, 700); // match slide-out duration
+  });
+} else {
+  addNewServicesIfPossible();
+    }
+    services = newServices;
+    previousServices = structuredClone(newServices);
+    updateFillerHeight();
+  } catch (err) {
+    console.error(err);
+    failedAttemptCount++;
+    if (!offlineStartTime) {
+      offlineStartTime = Date.now();
+    }
+    const now = Date.now();
+    const offlineMs = now - offlineStartTime;
+    const offlineMins = Math.floor(offlineMs / 60000);
+    const offlineSecs = Math.floor((offlineMs % 60000) / 1000);
+    container.innerHTML = `
+      <div style="text-align:center;font-size:3rem;margin-top:125px;">
+        We're working to fix a fault with this board.<br><br>
+        For live train information speak to station staff, use station help points<br>or check the National Rail app.<br>
+        <br><br><br><br><br><br>
+        <div style="font-size:0rem;">
+          Time offline: ${offlineMins} mins ${offlineSecs} secs<br>
+          Attempted API calls: ${failedAttemptCount}<br>
+          Retrying in 10 seconds...
+        </div>
+      </div>`;
+    lastFetchFailed = true;
+  }
+}
+fetchDepartures();
+// Poll every second to check if seconds end with 5
+setInterval(() => {
+  const now = new Date();
+  const sec = now.getSeconds();
+  if (sec % 10 === 11) { // 5, 15, 25, 35, 45, 55
+    fetchDepartures();
+  }
+}, 1000);
+
+
+
+
+
+
+function hideAllRows() {
+  const rows = Array.from(container.querySelectorAll('.departure-row'));
+  rows.forEach(row => {
+    row.style.display = 'none';
+  });
+}
+function showAllRows() {
+  const rows = Array.from(container.querySelectorAll('.departure-row'));
+  rows.forEach(row => {
+    row.style.display = 'flex'; // restore flex layout
+  });
+}
+function staggerSlideInRows() {
+  const rows = Array.from(container.querySelectorAll('.departure-row'));
+  rows.forEach((row, index) => {
+    row.style.visibility = 'hidden'; // hide before starting
+    // 0.5s initial delay + 0.5s per row
+    setTimeout(() => {
+      row.style.visibility = 'visible';
+      row.classList.add('slide-in');
+      setTimeout(() => row.classList.remove('slide-in'), 700); // remove class after animation
+    }, 125 + index * 62.5);
+  });
+}
+// On window resize
+window.addEventListener('resize', () => {
+  rebuildVisibleRows();
+populateOverflowDepartures();
+  staggerSlideInRows();
+  updateFillerHeight();
+});
+// When tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    staggerSlideInRows();
+  }
+});
+headerTitle.addEventListener('click', () => {
+  const code = prompt('Enter a station code (e.g., EUS, LST, GTW):', currentStationCode);
+  if (code) {
+    currentStationCode = code.toUpperCase();
+    localStorage.setItem('stationCode', currentStationCode);
+    services = [];
+    previousServices = [];
+    visibleServices = [];
+    platformChangeTime.clear();
+    offlineStartTime = null;
+    failedAttemptCount = 0;
+    lastFetchFailed = false;
+    container.innerHTML = '';
+    fetchDepartures();
+    updateFillerHeight();
+populateOverflowDepartures();
+
+  }
+});
+const footer = document.querySelector('footer');
+let footerHidden = false;
+footer.addEventListener('click', () => {
+  footerHidden = !footerHidden;
+  if (footerHidden) {
+    footer.style.transform = 'translateY(100%)';
+  } else {
+    footer.style.transform = 'translateY(0)';
+  }
+  footer.style.transition = 'transform 0.5s ease-in-out';
+});
+</script>
+</body>
+</html>

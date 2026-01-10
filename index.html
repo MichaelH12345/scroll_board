@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -13,11 +14,12 @@
     font-family: 'Open Sans';
     src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Regular.ttf') format('truetype');
   }
-  body {
+  html, body {
     margin: 0;
     background-color: black;
     color: white;
     font-family: 'Open Sans', sans-serif;
+    overflow: hidden; /* <-- stops the page from scrolling */
   }
   header {
     position: fixed;
@@ -135,7 +137,7 @@
     left: 0;
     right: 0;
     bottom: 87.5px; /* space for footer */
-    overflow: visible;
+    overflow: hidden;
     background-color: black;
     transform: translateY(0);
 }
@@ -181,7 +183,9 @@
 
   /* remove previous absolute positioning if any */
   #departures-container,
+   overflow: hidden;
   #filler-rectangle,
+   overflow: hidden;
 #overflow-departures {
   height: 100%;
   overflow: hidden;

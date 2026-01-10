@@ -130,7 +130,7 @@
 }
 
 #main-departures-container {
-    position: fixed;
+    position: relative;
     top: 0; /* start at top, we'll adjust in JS */
     left: 0;
     right: 0;
@@ -218,6 +218,25 @@
     opacity: 0;
   }
 }
+
+#overflow-cutoff-rect {
+  position: fixed;
+  border: 3px solid red;
+  pointer-events: none; /* don’t block clicks */
+  z-index: 9999;
+  display: none; /* only show when overflow exists */
+  box-sizing: border-box;
+}
+
+#overflow-cutoff-rect {
+  position: absolute;
+  border: 0px solid red;
+  pointer-events: none;
+  z-index: 20;
+  display: none;
+  box-sizing: border-box;
+}
+
 </style>
 </head>
 <body>
@@ -237,6 +256,7 @@
   <div id="departures-container"></div>
   <div id="filler-rectangle"></div>
   <div id="overflow-departures"></div>
+  <div id="overflow-cutoff-rect"></div>
 </div>
 
 <footer>
@@ -284,7 +304,16 @@ let onOverflowPage = false;
 let sliding = false;
 
 
+function getUsableBoardHeight() {
+  const header = document.querySelector('header');
+  const footer = document.querySelector('footer');
+  if (!header || !footer) return 0;
 
+  const headerBottom = header.getBoundingClientRect().bottom;
+  const footerTop = footer.getBoundingClientRect().top;
+
+  return footerTop - headerBottom;
+}
 
 // Trigger slide every multiple of 10 seconds (only once per second)
 let lastSlideSecond = -1;
@@ -463,46 +492,70 @@ function calculateOverflowMaxHeight() {
     if (!filler || !overflow) return;
 
     overflow.offsetHeight; // force reflow
-    overflowCutoffY = filler.getBoundingClientRect().bottom - 10;
+    overflowCutoffY = filler.getBoundingClientRect().bottom - 0;
 }
 
-function getPageHeight() {
-  return window.innerWidth > window.innerHeight
-    ? 850   // landscape
-    : 1495; // portrait
-}
 
 const isPortrait = window.innerHeight > window.innerWidth;
 const duration = isPortrait ? '0.75s' : '0.5s';   // slower in portrait
 mainContainer.style.transition = `transform ${duration} ease-in-out`;
-
 function filterOverflowRows() {
   const overflow = document.getElementById('overflow-departures');
-  if (!overflow || overflow.children.length === 0) return;
+  const filler = document.getElementById('filler-rectangle');
+  const rect = document.getElementById('overflow-cutoff-rect');
+
+  if (!overflow || !filler || overflow.children.length === 0) {
+    if (rect) rect.style.display = 'none';
+    return;
+  }
 
   const rows = Array.from(overflow.children);
-  const firstRow = rows[0];
-  if (!firstRow) return;
 
-  const firstTop = firstRow.getBoundingClientRect().top;
+  // Height from header to footer minus 10px
+  const usableHeight = getUsableBoardHeight() - 10;
 
-  // Determine cutoff based on orientation
-  const isPortrait = window.innerHeight > window.innerWidth;
-  const cutoff = isPortrait ? 1500 : 750;
+  // Position relative to container
+  const fillerBottom = filler.offsetTop + filler.offsetHeight;
+  const rectTop = fillerBottom;
 
-  // Show only rows within the cutoff distance of the first one
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    const distance = row.getBoundingClientRect().top - firstTop;
-    if (distance > cutoff) {
+  // Extend cutoff by 20px
+  const extendedHeight = usableHeight + 20;
+  const rectBottom = rectTop + extendedHeight;
+
+  // 🔴 Red rectangle (debug visual)
+  rect.style.display = 'block';
+  rect.style.top = rectTop + 'px';
+  rect.style.height = extendedHeight + 'px';
+  rect.style.left = '0';
+  rect.style.width = '100%';
+
+  let cutoffReached = false;
+
+  for (const row of rows) {
+    const rowTop = row.offsetTop;
+    const rowBottom = rowTop + row.offsetHeight;
+
+    if (cutoffReached || rowBottom > rectBottom) {
       row.style.display = 'none';
+      cutoffReached = true;
     } else {
-      row.style.display = 'flex'; // restore flex layout
+      row.style.display = 'flex';
     }
   }
 }
 
 
+
+// 🔴 Auto-update overflow cutoff rectangle when filler moves or resizes
+const filler = document.getElementById('filler-rectangle');
+
+if (filler && 'ResizeObserver' in window) {
+  const fillerObserver = new ResizeObserver(() => {
+    filterOverflowRows();
+  });
+
+  fillerObserver.observe(filler);
+}
 
 function fillRow(row, service) {
   row.innerHTML = '';
@@ -897,14 +950,12 @@ console.log(
     overflow.appendChild(realRow);
     currentHeight += rowH;
 
-    // Nice staggered entrance
-    realRow.style.opacity = '0';
-    realRow.style.transform = 'translateY(20px)';
-    setTimeout(() => {
-      realRow.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-      realRow.style.opacity = '1';
-      realRow.style.transform = 'translateY(0)';
-    }, 30 + (i - nextIndex) * 80);
+    // Use same slide-in as main list
+setTimeout(() => {
+  realRow.style.opacity = '1';
+  realRow.classList.add('slide-in');       // triggers main page X-axis animation
+  setTimeout(() => realRow.classList.remove('slide-in'), 700); // remove class after animation
+}, 50 + (i - nextIndex) * 65);  // staggered like main page
   }
 
   // Final safety net

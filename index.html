@@ -32,7 +32,7 @@
   .header-title {
     font-family: 'Open Sans Bold';
     font-size: 4rem;
-    margin: 0;
+    margin-top: 10px;
   max-width: calc(100% - 320px); /* leave space for page indicator */
   white-space: normal;
   word-break: break-word;
@@ -42,6 +42,7 @@
   .header-row {
     display: flex;
     align-items: center;
+    padding-top: 8px;
     font-size: 2.5rem;
   }
   .time { width: 100px; }
@@ -49,10 +50,11 @@
   .platform-header { width: 150px; position: absolute; right: 275px; text-align: right; }
   .status { width: 150px; position: absolute; right: 15px; text-align: right; }
   .departure-row {
+    padding-top: 5px;
     display: flex;
     align-items: flex-start;
     font-size: 3rem;
-    border-bottom: 3px solid grey;
+  border-bottom: 2.5px solid #444;
     padding: 5px 15px;
     position: relative;
     line-height: 1.3;
@@ -107,7 +109,7 @@
     100% { opacity: 0; }
   }
   .flash {
-    animation: fade 1s infinite ease-in-out;
+    animation: fade 2s infinite ease-in-out;
   }
   #filler-rectangle {
     height: 0;
@@ -121,7 +123,7 @@
 }
 
 #overflow-container .departure-row {
-  border-bottom: 2px solid #444;
+  border-bottom: 2.5px solid #444;
   opacity: 0.6;
 }
 
@@ -141,8 +143,8 @@
   position: absolute;
   top: 15px;
   right: 15px;
-  width: 275px;
-  height: 60px;
+  width: 260px;
+  height: 62.5px;
   border: 3px solid #888;
   background-color: ; /* lighter grey fill */
   color: white;
@@ -184,6 +186,36 @@
 
   }
 
+/* Make overflow rows a bit dimmer + prepare for animations */
+#overflow-departures .departure-row {
+  opacity: 0.75;
+  border-bottom: 2px solid #444;
+  transition: transform 0.6s ease-in-out, opacity 0.6s ease-in-out;
+}
+
+/* Optional: make overflow slide animations slightly faster/smoother */
+#overflow-departures .slide-in {
+  transform: translateY(-60%);
+  opacity: 0;
+  animation: slideInOverflow 0.6s forwards ease-out;
+}
+
+#overflow-departures .slide-out {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+/* Slightly different slide-in feel for overflow (optional but looks nicer) */
+@keyframes slideInOverflow {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 0;
+  }
+}
 </style>
 </head>
 <body>
@@ -244,53 +276,13 @@ let offlineStartTime = null;
 let failedAttemptCount = 0;
 const platformChangeTime = new Map();
 let fillerLocked = false;
+const lastAnimatedETD = new Map();
 
 let onOverflowPage = false;
 let sliding = false;
 
-// Slide container up/down
-function slideToOverflow() {
-  if (sliding) return; // prevent overlapping slides
-
-  const mainContainer = document.getElementById('main-departures-container');
-  const filler = document.getElementById('filler-rectangle');
-  const overflow = document.getElementById('overflow-departures');
-
-  if (!mainContainer || !filler || !overflow) return;
-  if (overflow.children.length === 0) return; // nothing to slide to
-
-  sliding = true;
-
-  // Freeze filler height
-  const frozenHeight = filler.offsetHeight;
-  filler.style.height = `${frozenHeight}px`;
-  filler.style.transition = 'none';
-  fillerLocked = true; // lock filler during slide
-
-  // Total height to slide = bottom of filler - top of container
-  const containerRect = mainContainer.getBoundingClientRect();
-  const fillerRect = filler.getBoundingClientRect();
-  const slideAmount = fillerRect.bottom - containerRect.top;
-
-  // Apply sliding
-  const duration = getSlideDuration();
-mainContainer.style.transition = `transform ${duration}s ease-in-out`;
-  mainContainer.style.transform = onOverflowPage
-    ? 'translateY(0px)'                // back to main list
-    : `translateY(-${slideAmount}px)`; // up to overflow
-
-  // Toggle page state
-  onOverflowPage = !onOverflowPage;
 
 
-setTimeout(() => {
-  if (!onOverflowPage) {
-    fillerLocked = false;
-    updateFillerHeight();
-  }
-  sliding = false;
-}, duration * 1000 + 100); // small buffer
-}
 
 // Trigger slide every multiple of 10 seconds (only once per second)
 let lastSlideSecond = -1;
@@ -301,7 +293,7 @@ setInterval(() => {
     lastSlideSecond = sec;
     slideToOverflow();
   }
-}, 250); // check 4x per second to avoid missing exact second
+}, 1000); // check 4x per second to avoid missing exact second
 
 function updatePageIndicator() {
   const pageIndicator = document.getElementById('page-indicator');
@@ -336,6 +328,7 @@ function updatePageIndicator() {
   wipeDiv.style.width = '100%';
 }
 
+const mainContainer = document.getElementById('main-departures-container');
 
 // Call inside slideToOverflow after page toggle
 function slideToOverflow() {
@@ -357,7 +350,7 @@ function slideToOverflow() {
   const fillerRect = filler.getBoundingClientRect();
   const slideAmount = fillerRect.bottom - containerRect.top;
 
-  mainContainer.style.transition = 'transform 0.75s ease-in-out';
+  
   mainContainer.style.transform = onOverflowPage
     ? 'translateY(0px)'
     : `translateY(-${slideAmount}px)`;
@@ -417,6 +410,11 @@ setInterval(() => {
   }
 }, 900);
 
+function findRowByServiceId(serviceId) {
+  return container.querySelector(`.departure-row[data-id="${serviceId}"]`);
+}
+
+
 function updateFooterDate() {
   const now = new Date();
   const weekday = now.toLocaleDateString('en-GB', { weekday: 'long' });
@@ -472,35 +470,34 @@ function getPageHeight() {
     : 1495; // portrait
 }
 
-function getSlideDuration() {
-  return window.innerWidth > window.innerHeight
-    ? 0.75   // landscape
-    : 1.0; // portrait
-}
+const isPortrait = window.innerHeight > window.innerWidth;
+const duration = isPortrait ? '0.75s' : '0.5s';   // slower in portrait
+mainContainer.style.transition = `transform ${duration} ease-in-out`;
 
 function filterOverflowRows() {
   const overflow = document.getElementById('overflow-departures');
-  const footer = document.querySelector('footer');
-  if (!overflow || !footer) return;
+  if (!overflow || overflow.children.length === 0) return;
 
-  const cutoff = footer.getBoundingClientRect().top + 1495;
-  let hideFromHere = false;
+  const rows = Array.from(overflow.children);
+  const firstRow = rows[0];
+  if (!firstRow) return;
 
-  Array.from(overflow.children).forEach(row => {
-    if (hideFromHere) {
+  const firstTop = firstRow.getBoundingClientRect().top;
+
+  // Determine cutoff based on orientation
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const cutoff = isPortrait ? 1500 : 750;
+
+  // Show only rows within the cutoff distance of the first one
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const distance = row.getBoundingClientRect().top - firstTop;
+    if (distance > cutoff) {
       row.style.display = 'none';
-      return;
-    }
-
-    const rowBottom = row.getBoundingClientRect().bottom;
-
-    if (rowBottom > cutoff) {
-      row.style.display = 'none';
-      hideFromHere = true; // 🔑 stop showing any further rows
     } else {
-      row.style.display = 'flex';
+      row.style.display = 'flex'; // restore flex layout
     }
-  });
+  }
 }
 
 
@@ -658,6 +655,88 @@ function populateContainer(containerElement, serviceList, visibleArray) {
   }
 }
 
+function populateOverflowListCorrectly() {
+  const overflow = document.getElementById('overflow-departures');
+  if (!overflow || services.length === 0) return;
+
+// Remove duplicate services from overflow if they already exist in main
+function removeDuplicatesFromOverflow() {
+  const overflow = document.getElementById('overflow-departures');
+  if (!overflow || overflow.children.length === 0) return;
+
+  // Build Set of IDs currently in main list (fast lookup)
+  const mainIds = new Set(
+    Array.from(container.querySelectorAll('.departure-row'))
+      .map(row => row.dataset.id)
+  );
+
+  // Find and remove rows in overflow that match any main ID
+  let removedCount = 0;
+  Array.from(overflow.children).forEach(row => {
+    if (mainIds.has(row.dataset.id)) {
+      // Optional: slide out before removing (looks smoother)
+      row.classList.add('slide-out');
+      setTimeout(() => {
+        row.remove();
+        removedCount++;
+      }, 600); // match your slide-out duration
+    }
+  });
+
+  if (removedCount > 0) {
+    console.log(`Removed ${removedCount} duplicate(s) from overflow`);
+    filterOverflowRows();     // re-filter in case layout changed
+    updatePageIndicator();    // hide indicator if overflow now empty
+  }
+}
+  // Clear existing overflow to start fresh (ensures order and no duplicates)
+  overflow.innerHTML = '';
+
+  // Find start index after last visible service
+  let startIndex = 0;
+  if (visibleServices.length > 0) {
+    const lastVisibleId = getServiceId(visibleServices[visibleServices.length - 1]);
+    startIndex = services.findIndex(s => getServiceId(s) === lastVisibleId) + 1;
+  }
+  if (startIndex >= services.length) return;
+
+  // Determine max cutoff based on orientation
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const maxCutoff = isPortrait ? 1495 : 850;
+
+  // Add services incrementally until cutoff is reached
+  let currentHeight = 0;
+  for (let i = startIndex; i < services.length; i++) {
+    const service = services[i];
+    const testRow = createRow(service);
+    testRow.style.visibility = 'hidden';
+    testRow.style.position = 'absolute';
+    overflow.appendChild(testRow);
+    const rowHeight = testRow.offsetHeight;
+    overflow.removeChild(testRow);
+
+    if (currentHeight + rowHeight > maxCutoff) {
+      break; // Stop if next row would exceed
+    }
+
+    // Add the real row
+    const realRow = createRow(service);
+    overflow.appendChild(realRow);
+    currentHeight += rowHeight;
+
+    // Staggered slide-in
+    setTimeout(() => {
+      realRow.classList.add('slide-in');
+      setTimeout(() => realRow.classList.remove('slide-in'), 700);
+    }, 50 + (i - startIndex) * 75);
+  }
+
+  updatePageIndicator();
+}
+
+
+
+
 function updateFillerHeight() {
   if (fillerLocked) return; // skip if filler is locked (overflow page)
 
@@ -709,46 +788,12 @@ function rebuildVisibleRows() {
 }
 function addNewServicesIfPossible() {
   if (services.length === 0) return;
+
   const availableHeight = window.innerHeight -
     document.querySelector('header').offsetHeight -
-      document.querySelector('footer').offsetHeight;
-  // Find the index in the full services[] of our current last visible row
-  let startIndex = 0;
-  if (visibleServices.length > 0) {
-    const lastId = getServiceId(visibleServices[visibleServices.length - 1]);
-    const found = services.findIndex(s => getServiceId(s) === lastId);
-    if (found !== -1) startIndex = found + 1;
-  }
-  // Try to append ONLY consecutive services, stop on first that doesn't fit
-  for (let i = startIndex; i < services.length; i++) {
-    const service = services[i];
-    const testRow = createRow(service);
-    testRow.style.visibility = 'hidden';
-    testRow.style.position = 'absolute';
-    container.appendChild(testRow);
-    const fits =
-      testRow.getBoundingClientRect().bottom -
-      container.getBoundingClientRect().top <= availableHeight;
-    container.removeChild(testRow);
-    if (!fits) {
-      break; // ← This is the key: stop here — no skipping to later services
-    }
-    // Fits → add it
-    const newRow = createRow(service);
-    newRow.classList.add('slide-in');
-    container.appendChild(newRow);
-    visibleServices.push(service);
-    setTimeout(() => newRow.classList.remove('slide-in'), 700);
-  }
-}
-function addNewServicesIfPossible() {
-  const availableHeight = window.innerHeight -
-    document.querySelector('header').offsetHeight -
-      document.querySelector('footer').offsetHeight;
+    document.querySelector('footer').offsetHeight;
 
   const overflow = document.getElementById('overflow-departures');
-
-  
 
   // Find index of last currently visible service in the full services[]
   let startIndex = 0;
@@ -757,25 +802,29 @@ function addNewServicesIfPossible() {
     startIndex = services.findIndex(s => getServiceId(s) === lastVisibleId) + 1;
   }
 
-  // Try to add next consecutive services, stop at first that doesn't fit
   for (let i = startIndex; i < services.length; i++) {
     const service = services[i];
 
-    // Test if this service would fit
     const testRow = createRow(service);
     testRow.style.visibility = 'hidden';
     testRow.style.position = 'absolute';
     container.appendChild(testRow);
 
-    const fits =
-      testRow.getBoundingClientRect().bottom -
-      container.getBoundingClientRect().top <= availableHeight;
+    const fits = testRow.getBoundingClientRect().bottom - container.getBoundingClientRect().top <= availableHeight;
 
     container.removeChild(testRow);
 
-    if (!fits) break;
+    if (!fits) {
+      // Service can't fit main list → ensure it’s in overflow
+      const existingOverflowRow = overflow.querySelector(`[data-id="${getServiceId(service)}"]`);
+      if (!existingOverflowRow) {
+        const overflowRow = createRow(service);
+        overflow.appendChild(overflowRow);
+      }
+      break; // stop trying to add further to main
+    }
 
-    // Add it for real
+    // Fits → add to main
     const newRow = createRow(service);
     newRow.classList.add('slide-in');
     container.appendChild(newRow);
@@ -785,25 +834,161 @@ function addNewServicesIfPossible() {
     if (overflow) {
       const overflowRow = overflow.querySelector(`[data-id="${getServiceId(service)}"]`);
       if (overflowRow) {
-        const height = overflowRow.offsetHeight;
-        overflowRow.classList.add('slide-out');
-        setTimeout(() => {
-          if (overflowRow.parentNode) overflowRow.parentNode.removeChild(overflowRow);
-
-          // Optionally, animate filler rectangle to absorb space
-          const filler = document.getElementById('filler-rectangle');
-          if (filler) {
-            const currentHeight = filler.offsetHeight;
-            filler.style.transition = 'height 0.55s ease-in-out';
-            filler.style.height = `${currentHeight + height}px`;
-          }
-        }, 500); // match slide-out duration
+        overflowRow.remove();
       }
     }
 
-    // Staggered animation removal
+    // Remove slide-in class after animation
     setTimeout(() => newRow.classList.remove('slide-in'), 700);
   }
+}
+
+function addToOverflowIfRoomAvailable() {
+  const overflow = document.getElementById('overflow-departures');
+  if (!overflow || services.length === 0) return;
+
+  const isPortrait = window.innerHeight > window.innerWidth;
+  const MAX_CUTOFF_PX = isPortrait ? 1495 : 850; // ← tune these values!
+
+  // Calculate current **visible** height in overflow
+  let currentHeight = 0;
+  Array.from(overflow.children).forEach(row => {
+    if (row.style.display !== 'none') {
+      currentHeight += row.offsetHeight;
+    }
+  });
+
+  // Find next service index to consider
+  let nextIndex = services.length;
+  const overflowRows = Array.from(overflow.children);
+  if (overflowRows.length > 0) {
+    const lastId = overflowRows[overflowRows.length - 1].dataset.id;
+    nextIndex = services.findIndex(s => getServiceId(s) === lastId) + 1;
+  } else if (visibleServices.length > 0) {
+    const lastVisibleId = getServiceId(visibleServices[visibleServices.length - 1]);
+    nextIndex = services.findIndex(s => getServiceId(s) === lastVisibleId) + 1;
+  }
+console.log(
+  'Overflow fill attempt — nextIndex:', nextIndex,
+  '| total services:', services.length,
+  '| last overflow ID:', overflowRows.length ? overflowRows.at(-1).dataset.id : 'none',
+  '| would start from service index:', nextIndex
+);
+  if (nextIndex >= services.length) return;
+
+  // Try to add as many as fit
+  for (let i = nextIndex; i < services.length; i++) {
+    const service = services[i];
+
+    // Measure height without permanently adding
+    const tester = createRow(service);
+    tester.style.visibility = 'hidden';
+    tester.style.position = 'absolute';
+    document.body.appendChild(tester); // ← append to body to avoid affecting layout
+    const rowH = tester.offsetHeight;
+    document.body.removeChild(tester);
+
+    if (currentHeight + rowH > MAX_CUTOFF_PX) break;
+
+    // Add real row
+    const realRow = createRow(service);
+    overflow.appendChild(realRow);
+    currentHeight += rowH;
+
+    // Nice staggered entrance
+    realRow.style.opacity = '0';
+    realRow.style.transform = 'translateY(20px)';
+    setTimeout(() => {
+      realRow.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+      realRow.style.opacity = '1';
+      realRow.style.transform = 'translateY(0)';
+    }, 30 + (i - nextIndex) * 80);
+  }
+
+  // Final safety net
+  filterOverflowRows();
+  updatePageIndicator();
+}
+
+
+function removeServiceFromMain(serviceId) {
+  if (sliding) return; // skip if sliding
+
+  const row = findRowByServiceId(serviceId);
+  if (!row) return;
+
+  const height = row.offsetHeight;
+
+  // Slide out the row
+  row.classList.add('slide-out');
+
+  setTimeout(() => {
+    // Insert placeholder to animate collapse
+    const placeholder = document.createElement('div');
+    placeholder.className = 'placeholder';
+    placeholder.style.height = `${height}px`;
+    placeholder.style.display = 'flex';
+    placeholder.style.transition = 'height 0.55s ease-in-out';
+
+    row.parentNode.insertBefore(placeholder, row);
+    row.remove();
+
+    visibleServices = visibleServices.filter(s => getServiceId(s) !== serviceId);
+    lastAnimatedETD.delete(serviceId);
+
+    // Collapse placeholder
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        placeholder.style.height = '0px';
+      });
+    });
+
+    setTimeout(() => {
+      placeholder.remove();
+
+      // ─── Step 1: Move overflow services to main if they fit ───
+      const overflow = document.getElementById('overflow-departures');
+      if (overflow && overflow.children.length > 0) {
+        const availableHeight = window.innerHeight -
+                                document.querySelector('header').offsetHeight -
+                                document.querySelector('footer').offsetHeight;
+
+        let mainBottom = container.lastElementChild
+          ? container.lastElementChild.getBoundingClientRect().bottom
+          : container.getBoundingClientRect().top;
+
+        const overflowRows = Array.from(overflow.children);
+
+        for (const overflowRow of overflowRows) {
+          const rowHeight = overflowRow.offsetHeight;
+
+          if (mainBottom + rowHeight - container.getBoundingClientRect().top > availableHeight) {
+            // This overflow service won't fit in main → stop
+            break;
+          }
+
+          // Move overflow row → main list
+          overflowRow.classList.add('slide-in');
+          container.appendChild(overflowRow);
+          visibleServices.push(services.find(s => getServiceId(s) === overflowRow.dataset.id));
+
+          mainBottom += rowHeight;
+
+          // Remove slide-in after animation
+          setTimeout(() => overflowRow.classList.remove('slide-in'), 700);
+        }
+      }
+
+// ─── Step 2: Add more to overflow if room available ───
+addToOverflowIfRoomAvailable();
+
+
+      // ─── Step 3: Final updates ───
+      filterOverflowRows();
+      updateFillerHeight();
+
+    }, 600);
+  }, 500);
 }
 
 
@@ -843,6 +1028,7 @@ async function fetchDepartures() {
       previousServices = structuredClone(newServices);
       platformChangeTime.clear();
       rebuildVisibleRows();
+      addToOverflowIfRoomAvailable();
       lastFetchFailed = false;
       return;
     }
@@ -850,9 +1036,10 @@ async function fetchDepartures() {
       services = newServices;
       previousServices = structuredClone(newServices);
       rebuildVisibleRows();
+      addToOverflowIfRoomAvailable();
       return;
     }
-newServices.forEach(service => {
+    newServices.forEach(service => {
   const id = getServiceId(service);
   const etd = service.etd || 'On time';
   if (etd === 'On time') {
@@ -868,100 +1055,91 @@ newServices.forEach(service => {
     onTimeStreaks.delete(id);
   }
 });
-    const currentRows = Array.from(container.querySelectorAll('.departure-row'));
-visibleServices.forEach((oldVisibleService, i) => {
-  const newService = newServices.find(
-    s => getServiceId(s) === getServiceId(oldVisibleService)
-  );
-  if (!newService) return;
-  const row = currentRows[i];
-  if (!row) return; // <-- safety check
 
-  const oldEtd = oldVisibleService.etd || 'On time';
+
+visibleServices.forEach(oldService => {
+  const id = getServiceId(oldService);
+  const newService = newServices.find(s => getServiceId(s) === id);
+  if (!newService) return;
+
+  const row = findRowByServiceId(id);
+  if (!row) return;
+
+  const oldEtd = oldService.etd || 'On time';
   const newEtd = newService.etd || 'On time';
-  const oldPlatform = oldVisibleService.platform || '';
-  const newPlatform = newService.platform || '';
-  const etdChanged = newEtd !== oldEtd;
-  const platformChanged = oldPlatform !== newPlatform && newPlatform;
-  if (platformChanged) {
-    platformChangeTime.set(getServiceId(newService), Date.now());
-  }
-  if (etdChanged || platformChanged) {
+  const lastAnimated = lastAnimatedETD.get(id);
+
+  // Only animate ONCE and ONLY if ETD has actually changed
+  if (oldEtd !== newEtd && lastAnimated !== newEtd) {
+    lastAnimatedETD.set(id, newEtd);
+
     row.classList.add('slide-out');
+
     setTimeout(() => {
       fillRow(row, newService);
+
       row.classList.remove('slide-out');
       row.classList.add('slide-in');
-      setTimeout(() => row.classList.remove('slide-in'), 700);
+
+      setTimeout(() => {
+        row.classList.remove('slide-in');
+      }, 700);
     }, 700);
   } else {
+    // No animation → just update content
     fillRow(row, newService);
   }
-  visibleServices[i] = newService;
 });
-
 
 
 const newIds = new Set(newServices.map(getServiceId));
-const rowsToRemove = [];
 
-// Compare previous visible services (rows actually on screen) with new API
-previousServices.forEach((oldService, index) => {
-  const row = currentRows[index];
-  if (!row) return;
+previousServices.forEach(oldService => {
   const id = getServiceId(oldService);
+
   if (!newIds.has(id)) {
-    rowsToRemove.push({ row, index });
-  }
-});
-if (rowsToRemove.length > 0) {
-  rowsToRemove.reverse().forEach(({ row, index }) => {
+    const row = findRowByServiceId(id);
+    if (!row) return;
+
     const height = row.offsetHeight;
+
+    // 1️⃣ Slide the service off-screen
     row.classList.add('slide-out');
 
     setTimeout(() => {
-      if (row.parentNode) container.removeChild(row);
-
+      // 2️⃣ Insert placeholder before removing row
       const placeholder = document.createElement('div');
-      placeholder.classList.add('placeholder');
+      placeholder.className = 'placeholder';
       placeholder.style.height = `${height}px`;
+      placeholder.style.display = 'flex'; // ensure placeholder has layout
+      placeholder.style.transition = 'height 0.55s ease-in-out';
 
-      if (container.children[index]) {
-        container.insertBefore(placeholder, container.children[index]);
-      } else {
-        container.appendChild(placeholder);
-      }
+      row.parentNode.insertBefore(placeholder, row);
 
-      // Temporarily unlock filler to stretch
-      const filler = document.getElementById('filler-rectangle');
-      if (filler) {
-        const currentHeight = filler.offsetHeight;
-        filler.style.transition = 'height 0.55s ease-in-out';
-        const wasLocked = fillerLocked;
-        fillerLocked = false; // temporarily allow update
-        filler.style.height = `${currentHeight + height}px`; // stretch filler
+      // 3️⃣ Remove the row
+      row.remove();
+      visibleServices = visibleServices.filter(s => getServiceId(s) !== id);
+      lastAnimatedETD.delete(id);
 
-        placeholder.style.transition = 'height 0.55s ease-in-out';
-        placeholder.style.height = '0px';
+      // 4️⃣ Animate placeholder collapse after next frame
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => { // double frame to ensure layout is painted
+          placeholder.style.height = '0px';
+        });
+      });
 
-        setTimeout(() => {
-          // Remove placeholder
-          if (placeholder.parentNode) container.removeChild(placeholder);
-
-          // TRY TO ADD NEW SERVICE(S) from overflow
-          addNewServicesIfPossible(); // this will remove them from overflow as needed
-
-          // RELock filler
-          fillerLocked = wasLocked;
-        }, 550);
-      }
-
-      visibleServices = visibleServices.filter(s => newIds.has(getServiceId(s)));
+      // 5️⃣ Clean up + refill after animation completes
+      setTimeout(() => {
+        placeholder.remove();
+        addNewServicesIfPossible();
+        addToOverflowIfRoomAvailable();
+        updateFillerHeight();
+      }, 600); // match transition duration
     }, 700); // match slide-out duration
-  });
-} else {
-  addNewServicesIfPossible();
-    }
+  }
+});
+
+
     services = newServices;
     previousServices = structuredClone(newServices);
     updateFillerHeight();
@@ -994,7 +1172,7 @@ fetchDepartures();
 setInterval(() => {
   const now = new Date();
   const sec = now.getSeconds();
-  if (sec % 10 === 11) { // 5, 15, 25, 35, 45, 55
+  if (sec % 10 === 5) { 
     fetchDepartures();
   }
 }, 1000);
@@ -1031,7 +1209,7 @@ function staggerSlideInRows() {
 // On window resize
 window.addEventListener('resize', () => {
   rebuildVisibleRows();
-populateOverflowDepartures();
+  addToOverflowIfRoomAvailable();
   staggerSlideInRows();
   updateFillerHeight();
 });
@@ -1057,6 +1235,7 @@ headerTitle.addEventListener('click', () => {
     fetchDepartures();
     updateFillerHeight();
 populateOverflowDepartures();
+addToOverflowIfRoomAvailable();
 
   }
 });
@@ -1071,6 +1250,9 @@ footer.addEventListener('click', () => {
   }
   footer.style.transition = 'transform 0.5s ease-in-out';
 });
+
+
+
 </script>
 </body>
 </html>

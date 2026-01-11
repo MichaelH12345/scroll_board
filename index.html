@@ -553,7 +553,7 @@ function calculateOverflowMaxHeight() {
 
 
 const isPortrait = window.innerHeight > window.innerWidth;
-const duration = isPortrait ? '0.75s' : '0.5s';   // slower in portrait
+const duration = isPortrait ? '0.5s' : '0.5s';   // slower in portrait
 mainContainer.style.transition = `transform ${duration} ease-in-out`;
 function filterOverflowRows() {
   const overflow = document.getElementById('overflow-departures');

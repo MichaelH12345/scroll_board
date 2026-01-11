@@ -196,7 +196,7 @@
 #overflow-departures .departure-row {
   opacity: 0.75;
   border-bottom: 2px solid #444;
-  transition: transform 0.6s ease-in-out, opacity 0.6s ease-in-out;
+  transition: transform 0.6s ease-in-out, opacity 0s ease-in-out;
 }
 
 /* Optional: make overflow slide animations slightly faster/smoother */
@@ -208,7 +208,7 @@
 }
 
 @keyframes slideIn {
-  from { transform: translateX(-100%); opacity: 0; }
+  from { transform: translateX(-100%); opacity: 1; }
   to   { transform: translateX(0); opacity: 1; }
 }
 
@@ -309,9 +309,29 @@ let failedAttemptCount = 0;
 const platformChangeTime = new Map();
 let fillerLocked = false;
 const lastAnimatedETD = new Map();
-
 let onOverflowPage = false;
 let sliding = false;
+let slidingPausedDueToError = false;
+let boardOffline = false;
+let slideInterval = null;
+
+
+function stopAndResetSliding() {
+  if (slideInterval) {
+    clearInterval(slideInterval);
+    slideInterval = null;
+  }
+function restartSliding() {
+  if (slideInterval) return; // already running
+  startSlidingLogic(); // 👈 use YOUR existing function name
+}
+
+
+  const departures = document.getElementById('departuresContainer');
+  if (departures) {
+    departures.style.transform = 'translateY(0px)';
+  }
+}
 
 
 function getUsableBoardHeight() {
@@ -323,6 +343,31 @@ function getUsableBoardHeight() {
   const footerTop = footer.getBoundingClientRect().top;
 
   return footerTop - headerBottom;
+}
+
+function forceStopSlidingAndResetBoard() {
+  slidingPausedDueToError = true;
+  sliding = false;
+  onOverflowPage = false;
+  fillerLocked = false;
+
+  const mainContainer = document.getElementById('main-departures-container');
+  if (mainContainer) {
+    mainContainer.style.transition = 'none';
+    mainContainer.style.transform = 'translateY(0px)';
+    mainContainer.offsetHeight; // force reflow
+    mainContainer.style.transition = '';
+  }
+
+  // Hide lists
+  container.style.display = 'none';
+
+  const overflow = document.getElementById('overflow-departures');
+  if (overflow) overflow.style.display = 'none';
+
+  // Hide page indicator
+  const pageIndicator = document.getElementById('page-indicator');
+  if (pageIndicator) pageIndicator.style.display = 'none';
 }
 
 // Trigger slide every multiple of 10 seconds (only once per second)
@@ -373,6 +418,7 @@ const mainContainer = document.getElementById('main-departures-container');
 
 // Call inside slideToOverflow after page toggle
 function slideToOverflow() {
+  if (slidingPausedDueToError) return;
   if (sliding) return;
 
   const mainContainer = document.getElementById('main-departures-container');
@@ -554,6 +600,9 @@ function filterOverflowRows() {
   }
 }
 
+function updateOverflowCutoffOnResize() {
+  filterOverflowRows();
+}
 
 
 // 🔴 Auto-update overflow cutoff rectangle when filler moves or resizes
@@ -982,24 +1031,32 @@ function removeServiceFromMain(serviceId) {
 
   const height = row.offsetHeight;
 
-  // Slide out the row
+  // Slide out the row horizontally first
   row.classList.add('slide-out');
 
   setTimeout(() => {
-    // Insert placeholder to animate collapse
+    // Create placeholder in the main container
     const placeholder = document.createElement('div');
     placeholder.className = 'placeholder';
-    placeholder.style.height = `${height}px`;
+    placeholder.style.height = '0px';
     placeholder.style.display = 'flex';
     placeholder.style.transition = 'height 0.55s ease-in-out';
-
     row.parentNode.insertBefore(placeholder, row);
     row.remove();
 
     visibleServices = visibleServices.filter(s => getServiceId(s) !== serviceId);
     lastAnimatedETD.delete(serviceId);
 
-    // Collapse placeholder
+    // Animate filler rectangle increase
+    const filler = document.getElementById('filler-rectangle');
+    const oldHeight = filler.offsetHeight;
+    const newHeight = oldHeight + height;
+    filler.style.transition = 'height 0.55s ease-in-out';
+    requestAnimationFrame(() => {
+      filler.style.height = `${newHeight}px`;
+    });
+
+    // Collapse placeholder to 0 height after short delay
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         placeholder.style.height = '0px';
@@ -1024,35 +1081,27 @@ function removeServiceFromMain(serviceId) {
 
         for (const overflowRow of overflowRows) {
           const rowHeight = overflowRow.offsetHeight;
+          if (mainBottom + rowHeight - container.getBoundingClientRect().top > availableHeight) break;
 
-          if (mainBottom + rowHeight - container.getBoundingClientRect().top > availableHeight) {
-            // This overflow service won't fit in main → stop
-            break;
-          }
-
-          // Move overflow row → main list
           overflowRow.classList.add('slide-in');
           container.appendChild(overflowRow);
           visibleServices.push(services.find(s => getServiceId(s) === overflowRow.dataset.id));
-
           mainBottom += rowHeight;
 
-          // Remove slide-in after animation
           setTimeout(() => overflowRow.classList.remove('slide-in'), 700);
         }
       }
 
-// ─── Step 2: Add more to overflow if room available ───
-addToOverflowIfRoomAvailable();
-
+      // ─── Step 2: Add more to overflow if room available ───
+      addToOverflowIfRoomAvailable();
 
       // ─── Step 3: Final updates ───
       filterOverflowRows();
       updateFillerHeight();
-
     }, 600);
   }, 500);
 }
+
 
 
 
@@ -1085,15 +1134,17 @@ async function fetchDepartures() {
     success = true;
     failedAttemptCount = 0;
     offlineStartTime = null;
-    if (lastFetchFailed) {
-      services = newServices;
-      previousServices = structuredClone(newServices);
-      platformChangeTime.clear();
-      rebuildVisibleRows();
-      addToOverflowIfRoomAvailable();
-      lastFetchFailed = false;
-      return;
-    }
+if (lastFetchFailed) {
+  lastFetchFailed = false;
+  failedAttemptCount = 0;
+  offlineStartTime = null;
+
+  fullBoardRestart(newServices);
+  return;
+}
+
+
+
     if (previousServices.length === 0) {
       services = newServices;
       previousServices = structuredClone(newServices);
@@ -1215,18 +1266,23 @@ previousServices.forEach(oldService => {
     const offlineMs = now - offlineStartTime;
     const offlineMins = Math.floor(offlineMs / 60000);
     const offlineSecs = Math.floor((offlineMs % 60000) / 1000);
-    container.innerHTML = `
-      <div style="text-align:center;font-size:3rem;margin-top:125px;">
-        We're working to fix a fault with this board.<br><br>
-        For live train information speak to station staff, use station help points<br>or check the National Rail app.<br>
-        <br><br><br><br><br><br>
-        <div style="font-size:0rem;">
-          Time offline: ${offlineMins} mins ${offlineSecs} secs<br>
-          Attempted API calls: ${failedAttemptCount}<br>
-          Retrying in 10 seconds...
-        </div>
-      </div>`;
-    lastFetchFailed = true;
+forceStopSlidingAndResetBoard();
+
+container.style.display = 'block';
+container.innerHTML = `
+  <div style="text-align:center;font-size:3rem;margin-top:100px;">
+    We're working to fix a fault with this board.<br><br>
+    For live train information speak to station staff, use station help points<br>
+    or check the National Rail app.<br>
+    <br><br><br><br><br><br>
+    <div style="font-size:0rem;">
+      Time offline: ${offlineMins} mins ${offlineSecs} secs<br>
+      Attempted API calls: ${failedAttemptCount}<br>
+      Retrying in 10 seconds...
+    </div>
+  </div>`;
+lastFetchFailed = true;
+
   }
 }
 fetchDepartures();
@@ -1239,6 +1295,35 @@ setInterval(() => {
   }
 }, 1000);
 
+
+function fullBoardRestart(newServices) {
+  services = structuredClone(newServices);
+  previousServices = structuredClone(newServices);
+  visibleServices = [];
+
+  lastAnimatedETD.clear();
+  platformChangeTime.clear();
+
+  fillerLocked = false;
+
+  container.innerHTML = '';
+  document.getElementById('overflow-departures').innerHTML = '';
+
+  const mainContainer = document.getElementById('main-departures-container');
+  mainContainer.style.transition = 'none';
+  mainContainer.style.transform = 'translateY(0px)';
+  mainContainer.offsetHeight;
+  mainContainer.style.transition = '';
+
+  rebuildVisibleRows();
+  addToOverflowIfRoomAvailable();
+  updateFillerHeight();
+
+  // 🔴 THIS IS THE IMPORTANT PART
+  restartPageSliding();
+
+  showBoardUI();
+}
 
 
 
@@ -1274,7 +1359,9 @@ window.addEventListener('resize', () => {
   addToOverflowIfRoomAvailable();
   staggerSlideInRows();
   updateFillerHeight();
+  updateOverflowCutoffOnResize(); // ← NEW
 });
+
 // When tab becomes visible again
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) {
@@ -1313,6 +1400,25 @@ footer.addEventListener('click', () => {
   footer.style.transition = 'transform 0.5s ease-in-out';
 });
 
+function hideBoardUI() {
+  const overflow = document.getElementById('overflow-departures');
+  const pageIndicator = document.getElementById('page-indicator');
+
+  container.style.display = 'none';
+  if (overflow) overflow.style.display = 'none';
+  if (pageIndicator) pageIndicator.style.display = 'none';
+}
+
+function showBoardUI() {
+  const overflow = document.getElementById('overflow-departures');
+  const pageIndicator = document.getElementById('page-indicator');
+
+  container.style.display = 'block';
+  if (overflow) overflow.style.display = 'block';
+
+  // Only show page indicator if overflow actually exists
+  updatePageIndicator();
+}
 
 
 </script>

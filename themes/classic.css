@@ -5,20 +5,20 @@
   --text-accent: #00bfff;
   --border-main: grey;
 
-  --font-regular: 'Open Sans', Arial, sans-serif;
-  --font-bold: 'Open Sans Bold', Arial, sans-serif;
+  --font-regular: 'Averta Regular', Arial, sans-serif;
+  --font-bold: 'Averta Semibold', Arial, sans-serif;
 }
 
 /* Load fonts from GitHub */
 @font-face {
-  font-family: 'Open Sans Bold';
-  src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Bold.ttf') format('truetype');
+  font-family: 'Averta Semibold';
+  src: url('https://github.com/MichaelH12345/scroll_board/blob/main/AvertaSemibold.woff') format('woff');
+}
+@font-face {
+  font-family: 'Averta Regular';
+  src: url('https://github.com/MichaelH12345/scroll_board/blob/main/Averta.woff') format('woff');
 }
 
-@font-face {
-  font-family: 'Open Sans';
-  src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Regular.ttf') format('truetype');
-}
 
 /* Global styles */
 body {

@@ -1,0 +1,197 @@
+/* ============================= */
+/* Avanti Theme for Departure Board */
+/* ============================= */
+
+/* ─── Fonts ─── */
+@font-face {
+  font-family: 'Averta Semibold';
+  src: url('https://github.com/MichaelH12345/scroll_board/blob/main/AvertaSemibold.woff') format('woff');
+}
+@font-face {
+  font-family: 'Averta Regular';
+  src: url('https://github.com/MichaelH12345/scroll_board/blob/main/Averta.woff') format('woff');
+}
+
+/* ─── Base Styles ─── */
+html, body {
+  margin: 0;
+  background-color: #141d2c; /* main background */
+  color: white;
+  font-family: 'Averta Regular', sans-serif;
+  overflow: hidden;
+}
+
+/* ─── Header ─── */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background-color: #141d2c;
+  border-bottom: 4px solid #fd4811;
+  padding-left: 15px;
+}
+
+.header-title {
+  font-family: 'Averta Semibold', sans-serif;
+  font-size: 4rem;
+  margin-top: 10px;
+  max-width: calc(100% - 320px);
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.1;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  padding-top: 8px;
+  font-size: 2.5rem;
+}
+
+.time { width: 100px; }
+.destination { flex: 1; margin-left: 50px; }
+.platform-header { width: 150px; position: absolute; right: 275px; text-align: right; }
+.status { width: 150px; position: absolute; right: 15px; text-align: right; }
+
+/* ─── Departure Rows ─── */
+.departure-row {
+  padding-top: 5px;
+  display: flex;
+  align-items: flex-start;
+  font-size: 3rem;
+  border-bottom: 2.5px solid #444;
+  padding: 5px 15px;
+  position: relative;
+  line-height: 1.3;
+  font-family: 'Averta Semibold', sans-serif;
+  transition: transform 0.5s ease-in-out;
+}
+
+.destination-box {
+  flex: 1;
+  margin-left: 25px;
+  font-family: 'Averta Regular', sans-serif; /* via, delay/cancel messages */
+}
+
+.secondary-info {
+  font-family: 'Averta Regular', sans-serif;
+  font-size: 3rem;
+}
+
+.platform {
+  position: absolute;
+  right: 275px;
+  font-family: 'Averta Semibold', sans-serif;
+}
+
+.expected {
+  position: absolute;
+  right: 15px;
+  font-family: 'Averta Regular', sans-serif;
+}
+
+/* ─── Cancelled & ETD Styling ─── */
+.expected.cancelled {
+  color: #fd4811 !important;
+  font-family: 'Averta Regular', sans-serif;
+  animation: none !important; /* stop flashing */
+}
+
+.expected.etd {
+  color: white !important;
+  font-family: 'Averta Regular', sans-serif;
+}
+
+/* ─── Footer ─── */
+footer {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+  height: 87.5px;
+  background-color: #fd4811;
+  border-top: 0px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 15px;
+  box-sizing: border-box;
+}
+
+#footer-message {
+  font-size: 2.5rem;
+  max-width: 75%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#footer-page { font-size: 3rem; }
+
+#footer-time {
+  font-size: 3.5rem;
+  font-family: 'Averta Semibold', sans-serif;
+  background-color: #141d2c;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#footer-time .label { font-size: 60%; font-family: 'Averta Regular', sans-serif; }
+
+/* ─── Slide Animations ─── */
+.slide-out {
+  transform: translateX(100%);
+}
+.slide-in {
+  transform: translateX(-100%);
+  animation: slideIn 0.5s forwards ease-in-out;
+}
+
+@keyframes slideIn {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}
+
+/* ─── Page Indicator ─── */
+#page-indicator {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 260px;
+  height: 62.5px;
+  border: 3px solid #888;
+  background-color: #141d2c;
+  color: white;
+  font-family: 'Averta Semibold', sans-serif;
+  font-size: 2.5rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  overflow: hidden;
+}
+
+#page-indicator .wipe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0%;
+  background-color: #888;
+  z-index: 1;
+  transition: width 10s linear;
+}
+
+#page-indicator span { position: relative; z-index: 2; }
+
+/* ─── Filler & Overflow ─── */
+#filler-rectangle { height: 0; background-color: #000; }
+#overflow-container, #overflow-departures {
+  background-color: #141d2c;
+  font-size: 2.4rem;
+  padding: 0 15px;
+}
+
+#overflow-departures .departure-row { border-bottom: 2.5px solid #444; opacity: 0.75; }

@@ -5,11 +5,24 @@
   --text-accent: #00bfff;
   --border-main: grey;
 
-  --font-regular: 'Open Sans';
-  --font-bold: 'Open Sans Bold';
+  --font-regular: 'Open Sans', Arial, sans-serif;
+  --font-bold: 'Open Sans Bold', Arial, sans-serif;
 }
 
+/* Load fonts from GitHub */
+@font-face {
+  font-family: 'Open Sans Bold';
+  src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Bold.ttf') format('truetype');
+}
+
+@font-face {
+  font-family: 'Open Sans';
+  src: url('https://raw.githubusercontent.com/MichaelH12345/simple-departure-board/main/Open%20Sans%20Regular.ttf') format('truetype');
+}
+
+/* Global styles */
 body {
+  margin: 0;
   background-color: var(--bg-main);
   color: var(--text-main);
   font-family: var(--font-regular);

@@ -502,6 +502,65 @@ function findRowByServiceId(serviceId) {
   return container.querySelector(`.departure-row[data-id="${serviceId}"]`);
 }
 
+// ────────────────────────────────────────────────
+// Unified Flash Handler for Platform & Cancelled
+// ────────────────────────────────────────────────
+function handlePlatformAndETDFlashes(service) {
+    const serviceId = getServiceId(service);
+    const row = findRowByServiceId(serviceId);
+    if (!row) return;
+
+    const platformDiv = row.querySelector('.platform');
+    const expectedDiv = row.querySelector('.expected');
+
+    // PLATFORM CHANGES
+    const previousPlatform = platformDiv.dataset.previousPlatform || platformDiv.textContent;
+    if (service.platform && previousPlatform !== service.platform) {
+        const now = Date.now();
+        platformChangeTime.set(serviceId, now);
+        platformDiv.dataset.previousPlatform = service.platform;
+
+        row.classList.add('slide-out');
+
+        setTimeout(() => {
+            row.classList.remove('slide-out');
+            platformDiv.textContent = service.platform;
+            platformDiv.style.color = 'white';
+            startUnifiedFlash(platformDiv, serviceId);
+        }, 500);
+    }
+
+    // CANCELLED / DELAYED ETD FLASH
+    if (expectedDiv) {
+        const shouldFlash = (service.etd === 'Cancelled' || (service.etd && service.etd !== 'On time'));
+        if (shouldFlash) {
+            startUnifiedFlash(expectedDiv, serviceId);
+        } else {
+            expectedDiv.classList.remove('flash');
+        }
+    }
+}
+
+// Unified flash logic
+function startUnifiedFlash(element, serviceId) {
+    const now = Date.now();
+    if (!element.dataset.flashStart) {
+        element.dataset.flashStart = now;
+        element.classList.add('flash');
+
+        setTimeout(() => {
+            element.classList.remove('flash');
+            delete element.dataset.flashStart;
+        }, 900000); // 15 minutes
+    }
+}
+
+// ────────────────────────────────────────────────
+// Usage example: call this after updating each service
+// ────────────────────────────────────────────────
+services.forEach(service => {
+    handlePlatformAndETDFlashes(service);
+});
 
 function updateFooterDate() {
   const now = new Date();
@@ -1102,7 +1161,37 @@ function removeServiceFromMain(serviceId) {
 }
 
 
+// ────────────────────────────────────────────────
+// Flash platform div on platform changes or ETD issues
+// ────────────────────────────────────────────────
+function flashPlatform(service) {
+    const serviceId = getServiceId(service);
+    const row = findRowByServiceId(serviceId);
+    if (!row) return;
 
+    const platformDiv = row.querySelector('.platform');
+    if (!platformDiv) return;
+
+    const previousPlatform = platformDiv.dataset.previousPlatform || platformDiv.textContent;
+
+    const shouldFlash = service.etd === 'Cancelled' || 
+                        (service.etd && service.etd !== 'On time') || 
+                        (service.platform && previousPlatform !== service.platform);
+
+    if (shouldFlash) {
+        platformDiv.dataset.previousPlatform = service.platform || previousPlatform;
+
+        // Add flash class
+        platformDiv.classList.add('flash');
+
+        // Remove flash after 15 minutes (or shorter for testing)
+        setTimeout(() => {
+            platformDiv.classList.remove('flash');
+        }, 15 * 60 * 1000);
+    } else {
+        platformDiv.classList.remove('flash');
+    }
+}
 
 async function fetchDepartures() {
   let success = false;
@@ -1170,12 +1259,18 @@ if (lastFetchFailed) {
 
 
 visibleServices.forEach(oldService => {
-  const id = getServiceId(oldService);
-  const newService = newServices.find(s => getServiceId(s) === id);
-  if (!newService) return;
+    const id = getServiceId(oldService);
+    const newService = newServices.find(s => getServiceId(s) === id);
+    if (!newService) return;
 
-  const row = findRowByServiceId(id);
-  if (!row) return;
+    const row = findRowByServiceId(id);
+    if (!row) return;
+
+    // Update row content
+    fillRow(row, newService);
+
+    // Flash platform box if needed
+    flashPlatform(newService);
 
   const oldEtd = oldService.etd || 'On time';
   const newEtd = newService.etd || 'On time';

@@ -61,7 +61,7 @@
     padding: 5px 15px;
     position: relative;
     line-height: 1.3;
-    transition: transform 1s cubic-bezier(0.5, 0, 0.25, 1);
+    transition: transform 0.5s cubic-bezier(0.25, 0, 0.25, 1);
   }
   .slide-out {
     transform: translateX(100%);
@@ -376,7 +376,7 @@ let lastSlideSecond = -1;
 setInterval(() => {
   const now = new Date();
   const sec = now.getSeconds();
-  if (sec % 7 === 0 && sec !== lastSlideSecond) {
+  if (sec % 10 === 0 && sec !== lastSlideSecond) {
     lastSlideSecond = sec;
     slideToOverflow();
   }
@@ -411,7 +411,7 @@ function updatePageIndicator() {
   wipeDiv.style.transition = 'none';
   wipeDiv.style.width = '0%';
   void wipeDiv.offsetWidth; // force reflow
-  wipeDiv.style.transition = 'width 7s linear';
+  wipeDiv.style.transition = 'width 10s linear';
   wipeDiv.style.width = '100%';
 }
 
@@ -555,7 +555,7 @@ function calculateOverflowMaxHeight() {
 
 const isPortrait = window.innerHeight > window.innerWidth;
 const duration = isPortrait ? '0.5s' : '0.5s';   // slower in portrait
-mainContainer.style.transition = 'transform 1s cubic-bezier(0.5, 0, 0.25, 1)';
+mainContainer.style.transition = 'transform 0.5s cubic-bezier(.55,0,.25,1)';
 function filterOverflowRows() {
   const overflow = document.getElementById('overflow-departures');
   const filler = document.getElementById('filler-rectangle');
@@ -893,11 +893,9 @@ function rebuildVisibleRows() {
     const newRow = createRow(service);
     container.appendChild(newRow);
     visibleServices.push(service);
-    setTimeout(() => {
-      newRow.style.visibility = 'visible';
-      newRow.classList.add('slide-in');
-      setTimeout(() => newRow.classList.remove('slide-in'), 700);
-    }, 125 + i * 62.5);
+newRow.style.visibility = 'visible';
+newRow.classList.add('slide-in');
+setTimeout(() => newRow.classList.remove('slide-in'), 700);
   }
   updateFillerHeight();
 }
@@ -1014,7 +1012,7 @@ console.log(
 setTimeout(() => {
   realRow.style.opacity = '1';
   realRow.classList.add('slide-in');       // triggers main page X-axis animation
-  setTimeout(() => realRow.classList.remove('slide-in'), 700); // remove class after animation
+  setTimeout(() => realRow.classList.remove('slide-in'), 1000); // remove class after animation
 }, 50 + (i - nextIndex) * 65);  // staggered like main page
   }
 
